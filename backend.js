@@ -1,4 +1,4 @@
-// backend.js — Lens → Shopping → 1st merchant
+// backend/backend.js
 const express   = require('express');
 const cors      = require('cors');
 const puppeteer = require('puppeteer-extra');
@@ -9,11 +9,8 @@ const path      = require('path');
 
 puppeteer.use(Stealth());
 
-// production = headless
 const HEADLESS = process.env.NODE_ENV === 'production';
-
-// Render (and our Dockerfile) installs Chrome at this path:
-const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/google-chrome-stable';
+const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/chromium';
 
 const TILE_SELECTORS = [
   'div.kbOPBd.cvP2Ce',
@@ -23,7 +20,7 @@ const TILE_SELECTORS = [
 ];
 
 async function lensToMerchant(buffer) {
-  const launchOpts = {
+  const browser = await puppeteer.launch({
     headless: HEADLESS ? 'new' : false,
     executablePath: CHROME_PATH,
     defaultViewport: null,
@@ -33,11 +30,8 @@ async function lensToMerchant(buffer) {
       '--disable-blink-features=AutomationControlled',
       '--lang=en-US'
     ]
-  };
+  });
 
-  const browser = await puppeteer.launch(launchOpts);
-
-  // write temp PNG
   const tmp = path.join(os.tmpdir(), `snippet-${Date.now()}.png`);
   fs.writeFileSync(tmp, buffer);
 
@@ -88,7 +82,7 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '8mb' }));
 
-app.get('/detect', (_q, res) =>
+app.get('/detect', (_req, res) =>
   res.send('GrabShop backend is up — POST JSON { image: dataURL }')
 );
 
@@ -106,7 +100,7 @@ app.post('/detect', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () =>
   console.log(`✅ Listening on http://0.0.0.0:${PORT}/detect`)
 );
