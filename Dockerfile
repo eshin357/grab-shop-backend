@@ -1,30 +1,35 @@
 # backend/Dockerfile
-FROM node:20-slim
 
-# 1) pull in Chromium and its deps
+# 1) Start from a Linux Node image
+FROM node:20-buster
+
+# 2) Install Chrome
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      chromium \
-      fonts-liberation \
-      libappindicator3-1 \
-      xdg-utils \
+      wget gnupg ca-certificates \
+ && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub \
+      | apt-key add - \
+ && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" \
+      > /etc/apt/sources.list.d/google.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+      google-chrome-stable \
  && rm -rf /var/lib/apt/lists/*
 
-# 2) set workdir
-WORKDIR /usr/src/app
-
-# 3) copy and install your Node deps
+# 3) Set working dir & copy only package.json first (for cache)
+WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --production
 
-# 4) copy the rest of your backend code
+# 4) Install deps
+RUN npm ci
+
+# 5) Copy the rest of your code
 COPY . .
 
-# 5) expose the port Render will route to
-ENV PORT 10000
+# 6) Tell Puppeteer where Chrome lives
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+# 7) Make sure we’re in “production” so your HEADLESS flag flips on
+ENV NODE_ENV=production
 
-# 6) tell Puppeteer where Chromium lives
-ENV CHROME_PATH=/usr/bin/chromium
-
-# 7) start your server
+# 8) Start your app
 CMD ["npm", "start"]
