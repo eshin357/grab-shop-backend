@@ -1,4 +1,4 @@
-// backend/backend.js
+// backend/backend.js — Lens → Shopping → 1st merchant
 const express   = require('express');
 const cors      = require('cors');
 const puppeteer = require('puppeteer-extra');
@@ -9,29 +9,39 @@ const path      = require('path');
 
 puppeteer.use(Stealth());
 
+// run headless when NODE_ENV=production
 const HEADLESS = process.env.NODE_ENV === 'production';
-const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/chromium';
+
+// pick up the Chrome executable that our Dockerfile (or Render) will install
+const CHROME_PATH =
+  process.env.PUPPETEER_EXECUTABLE_PATH ||
+  process.env.CHROME_PATH ||
+  '/usr/bin/google-chrome-stable';
 
 const TILE_SELECTORS = [
-  'div.kbOPBd.cvP2Ce',
-  'div.sh-dgr__grid-result',
-  'div.N54PNb.BToiNc',
-  'div[data-docid] div[jsname][role="link"]'
+  'div.kbOPBd.cvP2Ce',                   // grid layout
+  'div.sh-dgr__grid-result',             // older grid
+  'div.N54PNb.BToiNc',                   // list
+  'div[data-docid] div[jsname][role="link"]' // side-panel
 ];
 
 async function lensToMerchant(buffer) {
-  const browser = await puppeteer.launch({
+  // build our launch options
+  const launchOpts = {
     headless: HEADLESS ? 'new' : false,
-    executablePath: CHROME_PATH,
     defaultViewport: null,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-blink-features=AutomationControlled',
       '--lang=en-US'
-    ]
-  });
+    ],
+    executablePath: CHROME_PATH
+  };
 
+  const browser = await puppeteer.launch(launchOpts);
+
+  // write to a temp file
   const tmp = path.join(os.tmpdir(), `snippet-${Date.now()}.png`);
   fs.writeFileSync(tmp, buffer);
 
@@ -39,11 +49,12 @@ async function lensToMerchant(buffer) {
     const [page] = await browser.pages();
     await page.goto('https://images.google.com/', { waitUntil: 'networkidle2' });
     await page.click('div[aria-label="Search by image"]');
+
     const input = await page.waitForSelector('input[type=file]', { timeout: 5000 });
     await input.uploadFile(tmp);
     await page.waitForNavigation({ waitUntil: 'networkidle2' });
 
-    // optional “Products” tab
+    // switch to “Products” or “Shopping” if present
     const switched = await page.evaluate(() => {
       const btn = [...document.querySelectorAll('a,button')]
         .find(el => /Products|Shopping/i.test(el.innerText));
@@ -51,9 +62,11 @@ async function lensToMerchant(buffer) {
       return false;
     });
     if (switched) {
-      await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 5000 }).catch(() => {});
+      await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 5000 })
+        .catch(() => {});
     }
 
+    // find the first matching tile
     let sel = null;
     for (const s of TILE_SELECTORS) {
       try {
@@ -64,6 +77,7 @@ async function lensToMerchant(buffer) {
     }
     if (!sel) return null;
 
+    // grab its first outbound link
     const url = await page.evaluate(s => {
       const tile = document.querySelector(s);
       if (!tile) return null;

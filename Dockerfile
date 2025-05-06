@@ -1,9 +1,9 @@
 # backend/Dockerfile
 
-# 1) Start from a Linux Node image
+# 1) start from official Node + Debian base
 FROM node:20-buster
 
-# 2) Install Chrome
+# 2) install Chrome stable
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       wget gnupg ca-certificates \
@@ -16,20 +16,26 @@ RUN apt-get update \
       google-chrome-stable \
  && rm -rf /var/lib/apt/lists/*
 
-# 3) Set working dir & copy only package.json first (for cache)
+# 3) set your workdir
 WORKDIR /app
+
+# 4) copy package manifests first (for caching)
 COPY package.json package-lock.json ./
 
-# 4) Install deps
+# 5) install node modules
 RUN npm ci
 
-# 5) Copy the rest of your code
+# 6) copy the rest of your source
 COPY . .
 
-# 6) Tell Puppeteer where Chrome lives
+# 7) tell Puppeteer where Chrome is
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
-# 7) Make sure we’re in “production” so your HEADLESS flag flips on
+#    run in prod so HEADLESS=true
 ENV NODE_ENV=production
 
-# 8) Start your app
+# 8) expose the default Render port
+#    Render uses PORT env var (defaults to 10000)
+ENV PORT $PORT
+
+# 9) start your app
 CMD ["npm", "start"]
