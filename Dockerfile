@@ -1,33 +1,29 @@
-# ───────────────────────────────────────────────────────────────
-# 1) Base image with Node.js
-FROM node:20-buster
+# backend/Dockerfile
+FROM node:18-slim
 
-# 2) Install Chrome
-RUN apt-get update \
- && apt-get install -y wget gnupg ca-certificates \
- && wget -qO- https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
- && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" \
-       > /etc/apt/sources.list.d/google-chrome.list \
- && apt-get update \
- && apt-get install -y google-chrome-stable \
- && rm -rf /var/lib/apt/lists/*
+# install the dependencies Chrome needs
+RUN apt-get update && apt-get install -y \
+    wget gnupg ca-certificates --no-install-recommends \
+  && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub \
+     | apt-key add - \
+  && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" \
+     > /etc/apt/sources.list.d/google.list \
+  && apt-get update && apt-get install -y \
+     google-chrome-stable --no-install-recommends \
+  && rm -rf /var/lib/apt/lists/*
 
-# 3) Create app directory
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# 4) Copy package files and install deps
+# copy package files & install
 COPY package*.json ./
-RUN npm install --production
+RUN npm ci
 
-# 5) Copy your source in
+# copy the rest of your code
 COPY . .
 
-# 6) Ensure production mode
-ENV NODE_ENV=production
+# expose the port Render will bind
+ENV PORT 10000
+EXPOSE 10000
 
-# 7) Expose port (your app listens on $PORT or 3000)
-ENV PORT=3000
-EXPOSE 3000
-
-# 8) Start your server
-CMD ["node", "backend.js"]
+# start in production mode
+CMD ["npm", "start"]
